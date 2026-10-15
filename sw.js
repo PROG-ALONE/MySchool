@@ -1,5 +1,5 @@
 // Service Worker — يعمل التطبيق بدون إنترنت، ويجلب أحدث نسخة عند توفر الاتصال
-const CACHE = 'school-app-v2.6.0';
+const CACHE = 'school-app-v2.7.0';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -18,9 +18,11 @@ self.addEventListener('fetch', (e) => {
     const req = e.request;
     if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
     // الصفحة الرئيسية: الشبكة أولاً (لتصل التحديثات من GitHub)، ثم النسخة المخزنة عند انقطاع الإنترنت
+    // فحص res.ok ضروري: cache.put يخزّن استجابة 404 أيضاً، فبدونه تُمسخ النسخة المحلية بصفحة خطأ
     if (req.mode === 'navigate' || req.url.endsWith('/index.html')) {
         e.respondWith(
             fetch(req).then((res) => {
+                if (!res.ok) throw new Error('استجابة غير ناجحة ' + res.status);
                 const copy = res.clone();
                 caches.open(CACHE).then((c) => c.put('./index.html', copy));
                 return res;
@@ -31,6 +33,7 @@ self.addEventListener('fetch', (e) => {
     // باقي الملفات: من المخزن أولاً
     e.respondWith(
         caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
+            if (!res.ok) throw new Error('استجابة غير ناجحة ' + res.status);
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(req, copy));
             return res;

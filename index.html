@@ -420,6 +420,15 @@ const dbClear = s => tx(s, 'readwrite', os => os.clear());
 const dbPutMany = (s, arr) => tx(s, 'readwrite', os => { arr.forEach(v => os.put(v)); });
 const dbDelMany = (s, keys) => tx(s, 'readwrite', os => { keys.forEach(k => os.delete(k)); });
 const saveMeta = k => dbPut('meta', { k, v: S[k] });
+// معاملة واحدة تشمل عدة متاجر: تنجح كلها أو تفشل كلها — لا يوجد "نصف حذف/نصف استرجاع"
+const STORES = ['meta', 'students', 'grades', 'exams', 'attendance'];
+function txAll(stores, mode, fn) {
+  return new Promise((res, rej) => {
+    const t = db.transaction(stores, mode);
+    try { fn(t); } catch (e) { try { t.abort(); } catch (_) {} return rej(e); }
+    t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  });
+}
 
 // ============ الحالة ============
 const S = { settings: null, classes: [], subjects: [], students: [], grades: new Map(), exams: [], timetable: null, seating: null, absence: null, att: new Map() };
@@ -468,8 +477,10 @@ const classStudents = cls => S.students.filter(s => s.cls === cls).sort((a, b) =
 const allMonths = () => [...new Set([...S.settings.term1, ...S.settings.term2])];
 
 // ============ حسابات الدرجات ============
-const kM = (sid, sub, m) => `m|${sid}|${sub}|${m}`;
-const kY = (sid, sub) => `y|${sid}|${sub}`;
+// مفاتيح الدرجات مقسّمة بالسنة الدراسية: سنة جديدة = مفاتيح جديدة، وبيانات السنوات السابقة تبقى في القاعدة ولا تُمحى
+const yr = () => String(S.settings.year || '').trim();
+const kM = (sid, sub, m) => `m|${yr()}|${sid}|${sub}|${m}`;
+const kY = (sid, sub) => `y|${yr()}|${sid}|${sub}`;
 function monthTotal(sid, subj, m) { return monthParts(sid, subj, m).pct; }
 function monthValue(sid, subj, m) {
   const t = monthTotal(sid, subj, m);
@@ -507,10 +518,21 @@ async function flushSaves() {
     if (puts.length) await dbPutMany('grades', puts);
     if (dels.length) await dbDelMany('grades', dels);
     const sb = $('saveBar'); if (sb) sb.innerHTML = ic('check') + ' تم الحفظ تلقائياً ' + new Date().toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
-  } catch (e) { toast('تعذّر الحفظ: ' + e.message, 'bad'); }
+  } catch (e) {
+    // لا نفقد ما تعذّر حفظه: نعيد المفاتيح للطابور ونعيد المحاولة تلقائياً
+    keys.forEach(k => dirty.add(k));
+    clearTimeout(saveTimer); saveTimer = setTimeout(flushSaves, 3000);
+    toast('تعذّر حفظ الدرجات — ستُعاد المحاولة تلقائياً', 'bad');
+  }
 }
-window.addEventListener('visibilitychange', () => { if (document.hidden) flushSaves(); });
+window.addEventListener('visibilitychange', () => { if (document.hidden) flushSaves(); else bcPing(); });
 window.addEventListener('pagehide', flushSaves);
+// تحذير عند فتح التطبيق في تبويبين: التعديل المتزامن على نفس السجل قد يفقد تغييرات
+let appBC = null, bcWarned = false;
+try { if ('BroadcastChannel' in window) { appBC = new BroadcastChannel('myschool-app'); appBC.onmessage = () => { if (!bcWarned) { bcWarned = true; toast('التطبيق مفتوح في تبويب آخر على هذا الجهاز — تجنّب إدخال الدرجات فيهما معاً', 'bad'); } }; } } catch (e) {}
+function bcPing() { try { appBC && appBC.postMessage(1); } catch (e) {} }
+// دفتر الأسئلة المفتوح = تعديلات غير محفوظة؛ لا نسمح بإغلاق الصفحة دون تحذير
+window.addEventListener('beforeunload', e => { if (UI.exam) { e.preventDefault(); e.returnValue = ''; } });
 
 // ============ التنقل ============
 const TABS = [['home', 'الرئيسية', 'home'], ['students', 'الطلاب', 'users'], ['monthly', 'الدرجات الشهرية', 'edit'], ['yearly', 'السجل السنوي', 'book'], ['absence', 'الغيابات', 'cal'], ['eval', 'التقييم والأوائل', 'star'],
@@ -519,6 +541,8 @@ function renderNav() {
   $('nav').innerHTML = TABS.map(([id, label, icon]) => `<button class="${UI.tab === id ? 'on' : ''}" onclick="go('${id}')">${ic(icon)} ${label}</button>`).join('');
 }
 function go(tab) {
+  // دفتر الأسئلة المفتوح = تعديلات غير محفوظة؛ نمنع مغادرته بالخطأ
+  if (UI.exam && tab !== 'exams') { if (!confirm('يوجد دفتر أسئلة مفتوح فيه تعديلات غير محفوظة. هل تريد المغادرة دون حفظه؟')) return; UI.exam = null; }
   flushSaves(); UI.tab = tab; renderNav(); render(); window.scrollTo(0, 0);
 }
 function render() {
@@ -547,13 +571,24 @@ function closeModal() { $('modal').classList.add('hidden'); }
 // ======================================================================
 //  الرئيسية
 // ======================================================================
+// تذكير أسبوعي بالنسخة الاحتياطية: البيانات محلية، وإن لم تُؤخذ نسخة حديثة ننبّه
+const daysSince = d => d ? Math.floor((Date.now() - new Date(d).getTime()) / 86400000) : null;
+function backupNoticeHTML() {
+  if (!S.students.length && ![...S.grades.keys()].length) return '';
+  const lb = S.settings.lastBackup, n = daysSince(lb);
+  if (n !== null && n < 7) return '';
+  const msg = lb ? `آخر نسخة احتياطية كانت قبل ${n} ${n === 1 ? 'يوم' : 'أيام'}` : 'لم تأخذ نسخة احتياطية بعد';
+  return `<div class="card" style="border-right:5px solid #c98a00"><h2>النسخة الاحتياطية</h2>
+    <div class="warn">${msg} — البيانات محفوظة على هذا الجهاز فقط وتزول إذا حُذف التطبيق أو مُسحت بيانات المتصفح. احفظ نسخة الآن في «الملفات» أو أرسلها لنفسك.</div>
+    <div class="btns"><button class="btn g" onclick="exportBackup()">${ic('down')} حفظ نسخة احتياطية الآن</button></div></div>`;
+}
 function rHome() {
   const st = S.settings, h = new Date().getHours();
   const steps = [
     [S.classes.length > 0, 'أدخل معلومات المدرسة والصفوف', 'settings'],
     [S.students.length > 0, 'أضف الطلاب (يدوياً أو من ملف Excel)', 'students'],
     [S.subjects.length > 0, 'راجع المواد ونموذج درجات كل مادة', 'settings'],
-    [[...S.grades.keys()].some(k => k.startsWith('m|')), 'أدخل الدرجات الشهرية (تُحفظ تلقائياً)', 'monthly'],
+    [[...S.grades.keys()].some(k => k.startsWith('m|' + yr() + '|')), 'أدخل الدرجات الشهرية (تُحفظ تلقائياً)', 'monthly'],
     [S.timetable.result !== null, 'ولّد الجدول الأسبوعي للحصص', 'timetable'],
     [S.att.size > 0, 'سجّل الحضور والغياب يومياً', 'absence'],
     [false, 'راجع التقييم والأوائل وتقاريره', 'eval'],
@@ -569,6 +604,7 @@ function rHome() {
     <div class="stat"><b>${S.subjects.length}</b><span>المواد</span></div>
     <div class="stat" style="background:linear-gradient(145deg,#7c5800,#b8860b)"><b>${S.exams.length}</b><span>دفاتر الأسئلة</span></div>
   </div>
+  ${backupNoticeHTML()}
   ${homeAttHTML()}
   <div class="card"><h2>خطوات العمل</h2><ul class="steps">
     ${steps.map((s, i) => `<li class="${s[0] ? 'done' : ''}" onclick="go('${s[2]}')"><span class="n">${s[0] ? ic('check') : i + 1}</span><span>${s[1]}</span></li>`).join('')}
@@ -586,8 +622,8 @@ function rStudents() {
   if (!S.classes.length) return `<div class="card"><h2>الطلاب</h2><div class="warn">أضف الصفوف أولاً من تبويب الإعدادات.</div><button class="btn p" onclick="go('settings')">الذهاب للإعدادات</button></div>`;
   if (UI.stuClass && !S.classes.includes(UI.stuClass)) UI.stuClass = '';
   const addCls = UI.stuClass || S.classes[0];
-  const q = UI.stuSearch.trim();
-  let list = S.students.filter(s => (!UI.stuClass || s.cls === UI.stuClass) && (!q || s.name.includes(q) || String(s.num || '').includes(q)));
+  const q = UI.stuSearch.trim(), qn = arNorm(q);
+  let list = S.students.filter(s => (!UI.stuClass || s.cls === UI.stuClass) && (!q || arNorm(s.name).includes(qn) || String(s.num || '').includes(qn)));
   list.sort((a, b) => arCmp(a.cls, b.cls) || arCmp(a.name, b.name));
   return `
   <div class="card"><h2>إضافة طالب</h2>
@@ -672,9 +708,10 @@ async function saveStudentEdit(id) {
 }
 async function deleteStudent(id) {
   const s = S.students.find(x => x.id === id);
-  if (!confirm(`حذف "${s.name}" وجميع درجاته؟`)) return;
+  if (!s) return;
+  if (prompt(`لحذف "${s.name}" وجميع درجاته نهائياً اكتب الاسم كما هو:`) !== s.name) return toast('لم يُحذف — الاسم غير مطابق', 'bad');
   S.students = S.students.filter(x => x.id !== id);
-  const keys = [...S.grades.keys()].filter(k => k.split('|')[1] === id);
+  const keys = [...S.grades.values()].filter(g => g.sid === id).map(g => g.key);
   keys.forEach(k => S.grades.delete(k));
   await dbDel('students', id); if (keys.length) await dbDelMany('grades', keys);
   const ar = [...S.att.values()].filter(r => r.m[id]); ar.forEach(r => delete r.m[id]); if (ar.length) await dbPutMany('attendance', ar);
@@ -823,18 +860,24 @@ function afterMonthly() { updateMonthlyStats(); }
 function updateMonthlyStats() {
   const el = $('mStats'); if (!el) return;
   const subj = getSubj(UI.mSubj), studs = classStudents(UI.mClass);
-  const tots = studs.map(s => monthTotal(s.id, subj, UI.mMonth)).filter(v => v !== null);
+  const tots = studs.map(s => monthScore(s.id, subj, UI.mMonth)).filter(v => v !== null);
   el.textContent = `أُدخلت درجات ${tots.length} من ${studs.length}` + (tots.length ? ` • معدل الصف ${fmt(sum(tots) / tots.length)} • الناجحون ${tots.filter(t => t >= 50).length}` : '');
 }
 function mInput(el) {
   const v = toNum(el.value), max = +el.dataset.max;
   const bad = v !== null && (isNaN(v) || v < 0 || v > max);
   el.classList.toggle('bad', bad);
-  const sid = el.dataset.sid, subj = getSubj(UI.mSubj), key = kM(sid, subj.id, UI.mMonth);
+  const sid = el.dataset.sid, subj = getSubj(UI.mSubj), key = kM(sid, subj.id, UI.mMonth), col = el.dataset.col;
   const rec = S.grades.get(key) || { key, sid, subj: subj.id, month: UI.mMonth, s: {} };
-  if (v === null || bad) delete rec.s[el.dataset.col]; else rec.s[el.dataset.col] = v;
-  if (Object.keys(rec.s).length) S.grades.set(key, rec); else S.grades.delete(key);
-  markDirty(key);
+  if (bad) {
+    // قيمة غير صالحة (نص أو خارج المدى): لا نحذف الدرجة المحفوظة، ونعيد القيمة السابقة إلى المربع
+    const prev = rec.s[col]; el.value = (typeof prev === 'number') ? String(prev) : '';
+    toast('قيمة غير صالحة — لم تتغيّر الدرجة المحفوظة', 'bad');
+  } else {
+    if (v === null) delete rec.s[col]; else rec.s[col] = v;
+    if (Object.keys(rec.s).length) S.grades.set(key, rec); else S.grades.delete(key);
+    markDirty(key);
+  }
   // تحديث المجاميع
   subj.scheme.bands.forEach(b => {
     const c = $(`sb_${sid}_${b.id}`); if (!c) return;
@@ -942,12 +985,19 @@ function yInput(el) {
   const sid = el.dataset.sid, subj = getSubj(UI.ySubj), key = kY(sid, subj.id), kind = el.dataset.kind;
   const rec = S.grades.get(key) || { key, sid, subj: subj.id, months: {} };
   rec.months = rec.months || {};
-  const val = (v === null || bad) ? undefined : v;
-  if (kind === 'month') { if (val === undefined) delete rec.months[el.dataset.m]; else rec.months[el.dataset.m] = val; }
-  else { if (val === undefined) delete rec[kind]; else rec[kind] = val; }
-  const empty = !Object.keys(rec.months).length && ['mid', 'fin', 'sec'].every(k => rec[k] === undefined);
-  if (empty) S.grades.delete(key); else S.grades.set(key, rec);
-  markDirty(key);
+  if (bad) {
+    // قيمة غير صالحة: لا نحذف الدرجة المحفوظة، ونعيد القيمة السابقة إلى المربع
+    const prev = kind === 'month' ? rec.months[el.dataset.m] : rec[kind];
+    el.value = (typeof prev === 'number') ? String(prev) : '';
+    toast('قيمة غير صالحة — لم تتغيّر الدرجة المحفوظة', 'bad');
+  } else {
+    const val = (v === null) ? undefined : v;
+    if (kind === 'month') { if (val === undefined) delete rec.months[el.dataset.m]; else rec.months[el.dataset.m] = val; }
+    else { if (val === undefined) delete rec[kind]; else rec[kind] = val; }
+    const empty = !Object.keys(rec.months).length && ['mid', 'fin', 'sec'].every(k => rec[k] === undefined);
+    if (empty) S.grades.delete(key); else S.grades.set(key, rec);
+    markDirty(key);
+  }
   const c = yearCalc(sid, subj);
   const setRes = (id, v) => { const e = $(id); if (!e) return; e.textContent = fmt(v); if (id.startsWith('f')) e.className = v === null ? 'calc' : v < 50 ? 'fail' : 'pass'; };
   setRes('a1_' + sid, c.a1); setRes('a2_' + sid, c.a2); setRes('ef_' + sid, c.effort); setRes('fn_' + sid, c.final); setRes('f2_' + sid, c.final2);
@@ -1349,10 +1399,11 @@ function ttResultHTML() {
     <div class="tw" style="max-height:none">${UI.ttSel ? ttTableHTML(UI.ttView, UI.ttSel, true) : ''}</div>`;
 }
 function ttTap(d, p) {
-  const c = UI.ttSel, g = S.timetable.result.grid[c];
+  const c = UI.ttSel, R = S.timetable.result, g = R && R.grid[c];
+  if (!g || !g[d]) return;
   if (!UI.ttPick || UI.ttPick.c !== c) { UI.ttPick = { c, d, p }; render(); return; }
   const a = UI.ttPick; UI.ttPick = null;
-  if (a.d !== d || a.p !== p) { const tmp = g[a.d][a.p]; g[a.d][a.p] = g[d][p]; g[d][p] = tmp; saveMeta('timetable'); }
+  if ((a.d !== d || a.p !== p) && g[a.d]) { const tmp = g[a.d][a.p]; g[a.d][a.p] = g[d][p]; g[d][p] = tmp; saveMeta('timetable'); }
   render();
 }
 function ttHead(title) {
@@ -1794,7 +1845,7 @@ async function attSet(sid, code) {
   await attSaveRec(rec); render();
 }
 async function attReason(sid, r) { const rec = attRec(UI.aClass, UI.aDate); if (!rec || !rec.m[sid]) return; rec.m[sid].r = r; await attSaveRec(rec); }
-async function attAllPresent() { const rec = attEnsure(); rec.m = {}; rec.done = true; await attSaveRec(rec); render(); toast('تم حفظ حضور الجميع'); }
+async function attAllPresent() { if (!confirm('تعيين جميع طلاب الصف حاضرين في هذا اليوم؟ سيُستبدل أي تسجيل غياب سابق لهذا اليوم.')) return; const rec = attEnsure(); rec.m = {}; rec.done = true; await attSaveRec(rec); render(); toast('تم حفظ حضور الجميع'); }
 async function attNote(sid, v) {
   const rec = attRec(UI.aClass, UI.aDate); if (!rec) return;
   const cur = rec.m[sid] || { s: 'P', n: '', c: '', r: '' }; cur.n = v.trim();
@@ -1822,8 +1873,11 @@ function holidayAsk(from) {
 async function holidaySave() {
   let a = $('hFrom').value, b = $('hTo').value || a; const w = $('hWhy').value.trim() || 'عطلة';
   if (!a) return toast('اختر التاريخ', 'bad'); if (b < a) [a, b] = [b, a];
-  let n = 0; for (let k = a; k <= b && n < 200; k = addDays(k, 1)) if (!isWeekend(k)) { S.absence.holidays[k] = w; n++; }
-  await saveMeta('absence'); closeModal(); render(); toast(`تمت إضافة ${n} يوم عطلة`);
+  let n = 0, total = 0, guard = 0;
+  for (let k = a; k <= b && guard < 4000; k = addDays(k, 1), guard++) if (!isWeekend(k)) { total++; if (n < 200) { S.absence.holidays[k] = w; n++; } }
+  await saveMeta('absence'); closeModal(); render();
+  const capped = total > n;
+  toast(capped ? `أُضيفت ${n} يوم عطلة فقط (الحد الأقصى 200 لكل مرة) — أضف الباقي على دفعات` : `تمت إضافة ${n} يوم عطلة`, capped ? 'bad' : 'ok');
 }
 async function holidayDel(k) { delete S.absence.holidays[k]; await saveMeta('absence'); render(); }
 async function holidayDelRange(a, b) { Object.keys(S.absence.holidays).forEach(k => { if (k >= a && k <= b) delete S.absence.holidays[k]; }); await saveMeta('absence'); render(); }
@@ -2062,12 +2116,20 @@ const RANK_WORD = ['الأولى', 'الثانية', 'الثالثة', 'الرا
 const rankWord = r => S.settings.girls ? (RANK_WORD[r - 1] || r) : (['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'][r - 1] || r);
 const MEDAL = ['#d4a017', '#9aa3ad', '#b87333'];
 
+// نافذة أشهر الفصل: نحسبها من ترتيب الأشهر الدراسية بدل تثبيت أسماء أشهر يدوياً،
+// حتى تتكيّف تلقائياً إذا غيّر المستخدم أشهر الفصلين. نصف السنة الأول = الفصل الأول.
+function termWindow(term) {
+  const st = S.settings, order = ACADEMIC_MONTHS, mid = Math.ceil(order.length / 2);
+  const idxs = (st[term] || []).map(m => order.indexOf(m)).filter(i => i >= 0);
+  if (!idxs.length) return (st[term] || []).slice();
+  return term === 'term1' ? order.slice(0, Math.max(Math.max(...idxs), mid - 1) + 1) : order.slice(Math.min(Math.min(...idxs), mid));
+}
 function evalPeriod(kind, month) {
   const st = S.settings;
   const predOf = months => { const ps = months.map(monthPred); return k => ps.some(p => p(k)); };
   if (kind === 'month') return { label: 'شهر ' + month, months: [month], pred: monthPred(month) };
-  if (kind === 'term1') return { label: 'الفصل الأول', months: st.term1, pred: predOf(st.term1.concat(['كانون الثاني'])) };
-  if (kind === 'term2') return { label: 'الفصل الثاني', months: st.term2, pred: predOf(st.term2.concat(['شباط', 'أيار'])) };
+  if (kind === 'term1') { const ms = termWindow('term1'); return { label: 'الفصل الأول', months: ms, pred: predOf(ms) }; }
+  if (kind === 'term2') { const ms = termWindow('term2'); return { label: 'الفصل الثاني', months: ms, pred: predOf(ms) }; }
   return { label: 'السنة الدراسية', months: allMonths(), pred: k => k >= yearStart() };
 }
 // درجة المادة من 100 للفترة
@@ -2314,7 +2376,11 @@ function rSettings() {
     <div class="btns"><button class="btn g" onclick="exportBackup()">${ic('down')} حفظ نسخة احتياطية</button>
       <label class="btn b">${ic('up')} استرجاع نسخة<input type="file" class="hidden" accept=".json" onchange="importBackup(this)"></label>
       <button class="btn r" onclick="resetAll()">${ic('trash')} حذف كل البيانات</button></div>
-    <p class="muted">الإصدار 2.6</p>
+    <p class="muted">الإصدار 2.7</p>
+  </div>
+  <div class="card"><h2>بداية عام دراسي جديد</h2>
+    <div class="hint">لا تحذف هذه العملية أي بيانات: تُنسب درجات كل عام إلى عامها وتبقى محفوظة في الجهاز. استخدمها في بداية العام الدراسي لتفتح صفحة نظيفة للدرجات مع الاحتفاظ بأعوام سابقة.</div>
+    <div class="btns" style="margin-top:.6rem"><button class="btn b" onclick="newYearWizard()">${ic('cal')} بداية عام دراسي جديد</button></div>
   </div>`;
 }
 function monthPicker(term) {
@@ -2331,7 +2397,11 @@ function toggleMonth(term, m, on) {
 }
 function applyFont() { document.documentElement.style.fontSize = (16 * (S.settings.font || 100) / 100) + 'px'; }
 async function saveSchool() {
-  Object.assign(S.settings, { school: $('sSchool').value.trim(), year: $('sYear').value.trim(), girls: $('sGirls').value === '1', teacher: $('sTeacher').value.trim(), principal: $('sPrincipal').value.trim() });
+  const newYear = $('sYear').value.trim(), oldYear = String(S.settings.year || '').trim();
+  if (newYear && newYear !== oldYear) {
+    if (!confirm(`تغيير العام الدراسي من «${oldYear}» إلى «${newYear}».\n\nدرجات العام السابق تبقى محفوظة ولا تُمحى، وستبدأ إدخال درجات العام الجديد على صفحة نظيفة.\n\nمتابعة؟`)) return;
+  }
+  Object.assign(S.settings, { school: $('sSchool').value.trim(), year: newYear, girls: $('sGirls').value === '1', teacher: $('sTeacher').value.trim(), principal: $('sPrincipal').value.trim() });
   await saveMeta('settings'); render(); toast('تم حفظ معلومات المدرسة');
 }
 async function addClass() {
@@ -2374,7 +2444,7 @@ async function renameSubject(id) {
 }
 async function deleteSubject(id, n) {
   const s = getSubj(id);
-  if (!confirm(`حذف مادة "${s.name}"${n ? ` مع ${n} سجل درجات` : ''}؟ لا يمكن التراجع.`)) return;
+  if (prompt(`لحذف مادة "${s.name}"${n ? ` مع ${n} سجل درجات` : ''} نهائياً اكتب اسم المادة كما هو:`) !== s.name) return toast('لم تُحذف — الاسم غير مطابق', 'bad');
   S.subjects = S.subjects.filter(x => x.id !== id);
   const keys = [...S.grades.values()].filter(g => g.subj === id).map(g => g.key); keys.forEach(k => S.grades.delete(k));
   await saveMeta('subjects'); if (keys.length) await dbDelMany('grades', keys); render();
@@ -2411,26 +2481,90 @@ async function saveScheme() {
 // النسخ الاحتياطي
 async function exportBackup() {
   await flushSaves();
+  S.settings.lastBackup = new Date().toISOString();
+  await saveMeta('settings');
   const data = { app: 'granada-school', version: 3, date: new Date().toISOString(), settings: S.settings, classes: S.classes, subjects: S.subjects, students: S.students, grades: [...S.grades.values()], exams: S.exams, timetable: S.timetable, seating: S.seating, absence: S.absence, attendance: [...S.att.values()] };
   saveFile(new Blob([JSON.stringify(data)], { type: 'application/json' }), `نسخة_احتياطية_${new Date().toISOString().slice(0, 10)}.json`);
+  if (UI.tab === 'home') render();
+}
+function validateBackup(d) {
+  if (!d || typeof d !== 'object') throw new Error('ملف غير صالح');
+  if (d.app !== 'granada-school') throw new Error('هذا ليس ملف نسخة احتياطية لهذا البرنامج');
+  if (d.settings != null && typeof d.settings !== 'object') throw new Error('الإعدادات في النسخة تالفة');
+  for (const k of ['classes', 'subjects', 'students', 'grades', 'exams', 'attendance']) if (d[k] != null && !Array.isArray(d[k])) throw new Error('قسم تالف في النسخة: ' + k);
+  if ((d.students || []).some(s => !s || typeof s.id !== 'string' || typeof s.name !== 'string')) throw new Error('بيانات الطلاب في النسخة تالفة');
+  if ((d.grades || []).some(g => !g || typeof g.key !== 'string')) throw new Error('بيانات الدرجات في النسخة تالفة');
+  if ((d.attendance || []).some(r => !r || typeof r.key !== 'string')) throw new Error('بيانات الحضور في النسخة تالفة');
+  if ((d.exams || []).some(e => !e || typeof e.id !== 'string')) throw new Error('بيانات دفاتر الأسئلة في النسخة تالفة');
+  return true;
 }
 async function importBackup(input) {
   const f = input.files[0]; input.value = ''; if (!f) return;
   try {
     const d = JSON.parse(await f.text());
-    if (d.app !== 'granada-school') throw new Error('هذا ليس ملف نسخة احتياطية لهذا البرنامج');
+    validateBackup(d);
     if (!confirm('سيتم استبدال كل البيانات الحالية بمحتوى النسخة. متابعة؟')) return;
-    for (const s of ['meta', 'students', 'grades', 'exams', 'attendance']) await dbClear(s);
-    await dbPutMany('meta', ['settings', 'classes', 'subjects', 'timetable', 'seating', 'absence'].filter(k => d[k] !== undefined).map(k => ({ k, v: d[k] })));
-    await dbPutMany('students', d.students || []); await dbPutMany('grades', d.grades || []); await dbPutMany('exams', d.exams || []); await dbPutMany('attendance', d.attendance || []);
+    // كل عمليات الكتابة في معاملة واحدة على كل المتاجر: إما تُستبدل البيانات كاملة أو لا يتغيّر شيء (لا يوجد نصف استرجاع)
+    const metaRecs = [{ k: 'settings', v: Object.assign(defSettings(), d.settings || {}) }];
+    for (const k of ['classes', 'subjects']) metaRecs.push({ k, v: Array.isArray(d[k]) ? d[k] : [] });
+    for (const k of ['timetable', 'seating', 'absence']) if (d[k] !== undefined) metaRecs.push({ k, v: d[k] });
+    await txAll(STORES, 'readwrite', t => {
+      STORES.forEach(s => t.objectStore(s).clear());
+      const put = (s, arr) => { const os = t.objectStore(s); (arr || []).forEach(v => os.put(v)); };
+      metaRecs.forEach(r => t.objectStore('meta').put(r));
+      put('students', d.students); put('grades', d.grades); put('exams', d.exams); put('attendance', d.attendance);
+    });
     await loadAll(); render(); toast('تم استرجاع النسخة بنجاح');
   } catch (e) { toast('تعذّر الاسترجاع: ' + e.message, 'bad'); }
 }
 async function resetAll() {
   if (!confirm('حذف كل البيانات نهائياً؟')) return;
   if (prompt('للتأكيد اكتب: حذف') !== 'حذف') return;
-  for (const s of ['meta', 'students', 'grades', 'exams', 'attendance']) await dbClear(s);
+  // نأخذ نسخة احتياطية تلقائياً قبل الحذف حتى لا تُفقد البيانات بضغطة خاطئة
+  try { await exportBackup(); } catch (e) {}
+  await txAll(STORES, 'readwrite', t => STORES.forEach(s => t.objectStore(s).clear()));
   await loadAll(); render(); toast('تم الحذف');
+}
+// ============ بداية عام دراسي جديد ============
+function nextYearStr(y) {
+  const m = String(y || '').match(/(\d{4})\s*[-–/]\s*(\d{4})/);
+  if (m) return (+m[1] + 1) + '-' + (+m[2] + 1);
+  const n = String(y || '').match(/\d{4}/);
+  return n ? String(+n[0] + 1) : '';
+}
+function newYearWizard() {
+  const cur = String(S.settings.year || '').trim(), nxt = nextYearStr(cur) || cur;
+  openModal('بداية عام دراسي جديد',
+    `<div class="hint">هذه العملية <b>لا تحذف أي بيانات</b>. درجات العام الحالي (${esc(cur)}) تبقى محفوظة في الجهاز وتُنسب إلى عامها، وستبدأ إدخال درجات العام الجديد على صفحة نظيفة. الأعوام السابقة تبقى متاحة في النسخ الاحتياطية والقاعدة.</div>
+     <div class="f" style="margin-top:.6rem"><label>العام الدراسي الجديد</label><input class="in" id="nyYear" value="${esc(nxt)}" placeholder="مثال: 2027-2028"></div>
+     <label class="chip" style="margin:.5rem 0 0"><input type="checkbox" id="nyTt" checked> إعادة توليد الجدول الأسبوعي</label>
+     <label class="chip" style="margin:.4rem 0 0"><input type="checkbox" id="nySeat" checked> إعادة توزيع قاعات الامتحان</label>
+     <div class="warn" style="margin-top:.6rem">سيتم تنزيل نسخة احتياطية تلقائياً قبل المتابعة.</div>`,
+    `<button class="btn g" onclick="newYearRun()">${ic('check')} ابدأ العام الجديد</button><button class="btn" onclick="closeModal()">إلغاء</button>`);
+}
+async function newYearRun() {
+  const y = $('nyYear').value.trim(); if (!y) return toast('اكتب العام الدراسي', 'bad');
+  const reTt = $('nyTt').checked, reSeat = $('nySeat').checked;
+  try { await exportBackup(); } catch (e) {}
+  S.settings.year = y;
+  if (reTt) { S.timetable.result = null; S.timetable.stale = false; }
+  if (reSeat) { S.seating.result = null; }
+  await Promise.all([saveMeta('settings'), saveMeta('timetable'), saveMeta('seating')]);
+  UI.ttSel = ''; UI.ttPick = null;
+  closeModal(); render(); toast('بدأ العام الدراسي ' + y + ' — بيانات الأعوام السابقة محفوظة');
+}
+// نقل مفاتيح الدرجات القديمة (بدون سنة) إلى العام الحالي مرة واحدة — لا يُمحى شيء
+async function migrateYearKeys() {
+  const cy = yr(); if (!cy) return;
+  const put = [], del = [];
+  for (const g of [...S.grades.values()]) {
+    const p = String(g.key || '').split('|'); let nk = null;
+    if (p[0] === 'm' && p.length === 4) nk = `m|${cy}|${p[1]}|${p[2]}|${p[3]}`;
+    else if (p[0] === 'y' && p.length === 3) nk = `y|${cy}|${p[1]}|${p[2]}`;
+    if (nk && nk !== g.key && !S.grades.has(nk)) { const ok = g.key; S.grades.delete(ok); g.key = nk; S.grades.set(nk, g); put.push(g); del.push(ok); }
+  }
+  if (!put.length) return;
+  try { await dbPutMany('grades', put); await dbDelMany('grades', del); } catch (e) { /* البيانات باقية في الذاكرة وتُعاد المحاولة عند الحفظ */ }
 }
 
 // ======================================================================
@@ -2843,11 +2977,12 @@ async function loadAll() {
   _hijriCache.clear();
   S.students = await dbAll('students'); S.exams = await dbAll('exams');
   S.grades = new Map((await dbAll('grades')).map(g => [g.key, g]));
+  await migrateYearKeys();
   applyFont();
 }
 async function init() {
   try {
-    await openDB(); await loadAll(); renderNav(); render();
+    await openDB(); await loadAll(); renderNav(); render(); bcPing();
     if (window._migrated) toast('تم نقل الطلاب والمواد ودفاتر الأسئلة من النسخة السابقة');
   } catch (e) { console.error(e); $('view').innerHTML = `<div class="card err">خطأ في التشغيل: ${esc(e.message)}</div>`; }
 }
