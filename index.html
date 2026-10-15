@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d3b66">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,24 +18,25 @@
   --ok:#2e7d32;--bad:#c62828;--bg:#f3f6fa;--card:#fff;--text:#1a1a2e;--muted:#64748b;--line:#d8e0ea;
   --oral:#fdecef;--written:#e9f1fb;--sub:#fff5d6;--tot:#e5f4e7;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;margin:0;padding:0;touch-action:pan-x pan-y}
+html{-webkit-text-size-adjust:100%;height:100%;overscroll-behavior:none}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-tap-highlight-color:transparent;height:100%;height:100dvh;display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none;overflow-wrap:break-word}
+html,body{max-width:100%}
 .hidden{display:none!important}
 button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .ic{width:1.1em;height:1.1em;vertical-align:-.2em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
 
 /* header + nav */
-.top{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;padding:calc(.7rem + env(safe-area-inset-top)) 1rem .7rem;text-align:center}
+.top{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;padding:calc(.7rem + env(safe-area-inset-top)) 1rem .7rem;text-align:center;flex:0 0 auto}
 .top h1{font-size:clamp(1.05rem,3vw,1.4rem);font-weight:800}
 .top .sub{font-size:.85rem;opacity:.85}
-.nav{position:sticky;top:0;z-index:50;display:flex;gap:.35rem;overflow-x:auto;padding:.5rem .6rem;background:#fff;border-bottom:1px solid var(--line);scrollbar-width:none;box-shadow:0 2px 8px rgba(13,59,102,.06)}
+.nav{position:relative;z-index:50;display:flex;gap:.35rem;overflow-x:auto;padding:.5rem .6rem;background:#fff;border-bottom:1px solid var(--line);scrollbar-width:none;box-shadow:0 2px 8px rgba(13,59,102,.06);flex:0 0 auto}
 .nav::-webkit-scrollbar{display:none}
 @media(min-width:900px){.nav{flex-wrap:wrap;justify-content:center}}
 .nav button{flex:0 0 auto;display:flex;align-items:center;gap:.35rem;border:1px solid transparent;background:#eef2f7;color:#40506a;border-radius:22px;padding:.5rem .95rem;font-weight:700;font-size:.88rem;cursor:pointer;min-height:40px}
 .nav button.on{background:var(--pri);color:#fff;border-color:var(--acc)}
 
-.wrap{max-width:1400px;margin:0 auto;padding:.9rem .8rem 90px}
+.wrap{width:100%;max-width:1400px;margin:0 auto;padding:.9rem .8rem calc(1.5rem + env(safe-area-inset-bottom));flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .card{background:var(--card);border-radius:14px;padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:0 3px 14px rgba(13,59,102,.07);border:1px solid rgba(0,0,0,.03)}
 .card h2{font-size:1.08rem;color:var(--pri);display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem;padding-bottom:.5rem;border-bottom:2px solid var(--line)}
 .card h2::before{content:'';width:4px;height:20px;background:var(--acc);border-radius:2px}
@@ -45,6 +46,12 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 .warn{background:#fff6e0;border-right:3px solid var(--acc);padding:.6rem .8rem;border-radius:8px;font-size:.86rem;margin:.6rem 0;color:#6b4d00}
 .err{background:#fdecec;border-right:3px solid var(--bad);padding:.6rem .8rem;border-radius:8px;font-size:.86rem;margin:.6rem 0;color:#8a1c1c}
 .good{background:#e8f5e9;border-right:3px solid var(--ok);padding:.6rem .8rem;border-radius:8px;font-size:.86rem;margin:.6rem 0;color:#1b5e20}
+
+/* منع خروج النصوص والصناديق عن حدود الشاشة */
+.card,.hero,.hint,.warn,.err,.good,.li,.modal,.datebox,.chip,.stat{overflow-wrap:anywhere;max-width:100%}
+.top h1,.top .sub{overflow-wrap:anywhere}
+img,svg,canvas{max-width:100%;height:auto}
+.card h2,.card h3{overflow-wrap:anywhere}
 
 .row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
 .row>.f{flex:1 1 160px;min-width:0}
@@ -133,7 +140,7 @@ table.seat.mini td{width:24px;height:20px;border-radius:4px;padding:0;font-size:
 
 /* modal */
 .modal-bg{position:fixed;inset:0;background:rgba(13,30,55,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem}
-.modal{background:#fff;border-radius:16px;width:100%;max-width:760px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal{background:#fff;border-radius:16px;width:100%;max-width:760px;max-height:92vh;max-height:88dvh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25)}
 .modal-h{display:flex;justify-content:space-between;align-items:center;padding:.9rem 1.1rem;border-bottom:1px solid var(--line);color:var(--pri);font-size:1.05rem}
 .modal-b{padding:1rem 1.1rem;overflow:auto}
 .modal-f{padding:.7rem 1.1rem;border-top:1px solid var(--line);display:flex;gap:.5rem;justify-content:flex-start;flex-wrap:wrap}
@@ -150,10 +157,10 @@ table.seat.mini td{width:24px;height:20px;border-radius:4px;padding:0;font-size:
 
 /* print view (full page preview) */
 body.pv-open>*:not(#printView):not(#toast):not(#pageSize){display:none!important}
-#printView{background:#e9edf2;min-height:100vh}
-.pv-bar{position:sticky;top:0;z-index:10;background:var(--pri);color:#fff;padding:calc(.5rem + env(safe-area-inset-top)) .7rem .5rem;display:flex;gap:.45rem;flex-wrap:wrap;align-items:center}
+#printView{position:fixed;inset:0;z-index:300;display:flex;flex-direction:column;background:#e9edf2;overscroll-behavior:contain}
+.pv-bar{position:relative;z-index:10;background:var(--pri);color:#fff;padding:calc(.5rem + env(safe-area-inset-top)) .7rem .5rem;display:flex;gap:.45rem;flex-wrap:wrap;align-items:center;flex:0 0 auto;box-shadow:0 2px 10px rgba(0,0,0,.2)}
 .pv-bar .t{margin-right:auto;font-weight:700;font-size:.9rem}
-#printBody{padding:12px;overflow-x:auto;zoom:var(--pz,1)}
+#printBody{flex:1 1 auto;min-height:0;padding:12px;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;zoom:var(--pz,1)}
 .sheet{background:#fff;margin:0 auto 14px;padding:10mm;box-shadow:0 2px 10px rgba(0,0,0,.12);color:#000;font-family:'Times New Roman','Traditional Arabic',Tahoma,serif;width:max-content}
 /* كل ورقة = صفحة A4 ثابتة؛ المحتوى يُقاس ويُصغَّر ليتسع، والورقة العرضية تُدار على الصفحة العمودية عند الطباعة */
 .sheet .pg{position:relative;width:180mm;height:260mm;overflow:hidden}
@@ -281,24 +288,34 @@ h3.sec{font-size:12pt;color:#0d3b66;margin:10px 0 4px;border-bottom:1.5px solid 
 
 @media print{
   @page{size:A4 portrait;margin:17mm 15mm}
-  html,body{background:#fff;margin:0;padding:0}
+  html,body{background:#fff;margin:0;padding:0;display:block;overflow:visible;height:auto;max-width:none}
   .pv-bar{display:none!important}
-  #printView{background:#fff;min-height:0}
-  #printBody{padding:0;zoom:1!important;overflow:visible}
+  #printView{position:static;inset:auto;display:block;height:auto;background:#fff;min-height:0;overflow:visible}
+  #printBody{display:block;padding:0;zoom:1!important;overflow:visible;flex:none;min-height:0}
   #toast,.modal-bg{display:none!important}
   .sheet{margin:0;padding:0;box-shadow:none;width:auto;break-inside:avoid;page-break-inside:avoid}
   .sheet:not(:last-child){break-after:page;page-break-after:always}
   .sheet .pg,.sheet.land .pg{width:180mm;height:260mm}
   .sheet.land .fit{right:auto;left:0;transform-origin:top left;transform:translateY(260mm) rotate(-90deg) scale(var(--s,1))}
+  .sheet .fit{overflow-wrap:anywhere}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 }
 @media(max-width:640px){
-  .wrap{padding:.6rem .45rem 90px}
+  .wrap{padding:.6rem .45rem calc(1.2rem + env(safe-area-inset-bottom))}
   .card{padding:.8rem}
   .row>.f{flex-basis:100%}
   .btns .btn{flex:1 1 auto}
   table.t td.nm{min-width:110px;font-size:.8rem}
   input.g{width:50px}
+  .top h1{font-size:1.05rem}
+  .hero .g1{font-size:1.15rem}
+  .stat b{font-size:1.5rem}
+}
+@media(max-width:400px){
+  .nav button{padding:.45rem .7rem;font-size:.82rem}
+  .card{padding:.65rem}
+  .btn{font-size:.85rem;padding:.5rem .7rem}
+  .rc-main button{font-size:1.35rem;min-height:84px}
 }
 </style>
 <style id="pageSize"></style>
@@ -533,6 +550,8 @@ try { if ('BroadcastChannel' in window) { appBC = new BroadcastChannel('myschool
 function bcPing() { try { appBC && appBC.postMessage(1); } catch (e) {} }
 // دفتر الأسئلة المفتوح = تعديلات غير محفوظة؛ لا نسمح بإغلاق الصفحة دون تحذير
 window.addEventListener('beforeunload', e => { if (UI.exam) { e.preventDefault(); e.returnValue = ''; } });
+// إلغاء الزوم بالكامل: سفاري في iOS يتجاهل user-scalable=no، فنمنع إيماءة التكبير
+['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
 
 // ============ التنقل ============
 const TABS = [['home', 'الرئيسية', 'home'], ['students', 'الطلاب', 'users'], ['monthly', 'الدرجات الشهرية', 'edit'], ['yearly', 'السجل السنوي', 'book'], ['absence', 'الغيابات', 'cal'], ['eval', 'التقييم والأوائل', 'star'],
@@ -543,7 +562,8 @@ function renderNav() {
 function go(tab) {
   // دفتر الأسئلة المفتوح = تعديلات غير محفوظة؛ نمنع مغادرته بالخطأ
   if (UI.exam && tab !== 'exams') { if (!confirm('يوجد دفتر أسئلة مفتوح فيه تعديلات غير محفوظة. هل تريد المغادرة دون حفظه؟')) return; UI.exam = null; }
-  flushSaves(); UI.tab = tab; renderNav(); render(); window.scrollTo(0, 0);
+  flushSaves(); UI.tab = tab; renderNav(); render();
+  const v = $('view'); if (v) v.scrollTop = 0;
 }
 function render() {
   const st = S.settings;
@@ -2376,7 +2396,7 @@ function rSettings() {
     <div class="btns"><button class="btn g" onclick="exportBackup()">${ic('down')} حفظ نسخة احتياطية</button>
       <label class="btn b">${ic('up')} استرجاع نسخة<input type="file" class="hidden" accept=".json" onchange="importBackup(this)"></label>
       <button class="btn r" onclick="resetAll()">${ic('trash')} حذف كل البيانات</button></div>
-    <p class="muted">الإصدار 2.7</p>
+    <p class="muted">الإصدار 2.8</p>
   </div>
   <div class="card"><h2>بداية عام دراسي جديد</h2>
     <div class="hint">لا تحذف هذه العملية أي بيانات: تُنسب درجات كل عام إلى عامها وتبقى محفوظة في الجهاز. استخدمها في بداية العام الدراسي لتفتح صفحة نظيفة للدرجات مع الاحتفاظ بأعوام سابقة.</div>
@@ -2582,7 +2602,7 @@ function showPrint(title, html, o = {}) {
   $('printBody').innerHTML = html;
   $('printView').classList.remove('hidden'); document.body.classList.add('pv-open');
   layoutSheets();
-  window._pvY = window.scrollY; window.scrollTo(0, 0);
+  const v = $('view'); window._pvY = v ? v.scrollTop : 0;
   try { history.pushState({ pv: 1 }, ''); window._pvPushed = true; } catch (e) {}
 }
 // يضع كل ورقة في صندوق صفحة ثابت ويصغّرها حتى تتسع عرضاً وارتفاعاً (لا قص ولا صفحات زائدة)
@@ -2616,7 +2636,7 @@ function fitCells() {
     while (sp.offsetWidth > avail && fs > 4) { fs -= 0.3; sp.style.fontSize = fs + 'px'; }
   }));
 }
-function hidePrint() { $('printView').classList.add('hidden'); document.body.classList.remove('pv-open'); $('printBody').innerHTML = ''; window.scrollTo(0, window._pvY || 0); }
+function hidePrint() { $('printView').classList.add('hidden'); document.body.classList.remove('pv-open'); $('printBody').innerHTML = ''; const v = $('view'); if (v) v.scrollTop = window._pvY || 0; }
 function closePrint() { hidePrint(); if (window._pvPushed) { window._pvPushed = false; history.back(); } }
 window.addEventListener('popstate', () => { if (!$('printView').classList.contains('hidden')) { window._pvPushed = false; hidePrint(); } });
 function doPrint() { try { window.print(); } catch (e) { toast('الطباعة غير متاحة هنا — استخدم زر المشاركة في المتصفح أو Excel', 'bad'); } }
