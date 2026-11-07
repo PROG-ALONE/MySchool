@@ -37,6 +37,34 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 .nav button.on{background:var(--pri);color:#fff;border-color:var(--acc)}
 .more-tabs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.6rem}
 .more-tabs-grid .btn{display:flex;align-items:center;justify-content:flex-start;gap:.45rem}
+@media(max-width:640px){
+  .nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.25rem;overflow:visible;padding:.4rem}
+  .nav button{min-width:0;min-height:44px;justify-content:center;gap:.2rem;padding:.4rem .2rem;border-radius:12px;font-size:.72rem;white-space:nowrap}
+  .nav button .ic{width:.95em;height:.95em}
+}
+
+.backup-notice{display:flex;align-items:center;justify-content:space-between;gap:.7rem;flex-wrap:wrap;margin-bottom:1rem;padding:.65rem .8rem;border:1px solid #ecd89e;border-inline-start:4px solid var(--acc);border-radius:12px;background:#fff9e9;color:#6b4d00}
+.backup-notice p{margin:0;font-size:.84rem}
+.backup-notice small{display:block;color:#866d32;font-size:.75rem}
+.backup-notice .btn{min-height:36px}
+.home-start-head{display:flex;align-items:center;justify-content:space-between;gap:.7rem}
+.home-start-head h2{margin-bottom:0}
+.home-start-head > span{flex:0 0 auto;color:var(--pri);font-weight:800}
+.home-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.5rem;margin:.75rem 0}
+.home-action{display:grid;gap:.15rem;justify-items:start;min-width:0;padding:.65rem .75rem;border:1px solid var(--line);border-radius:12px;background:#f3f7fb;color:var(--pri);font:inherit;text-align:start;cursor:pointer}
+.home-action strong{font-size:.84rem}
+.home-action small{color:var(--muted);font-size:.72rem}
+.workflow-details{margin-top:.7rem;border-top:1px solid var(--line);padding-top:.6rem}
+.workflow-details summary{cursor:pointer;color:var(--pri);font-weight:800}
+.student-tools > summary{display:flex;align-items:center;justify-content:space-between;gap:.6rem;list-style:none;cursor:pointer;color:var(--pri);font-weight:800}
+.student-tools > summary::-webkit-details-marker{display:none}
+.student-tools > summary::after{content:'＋';display:grid;width:28px;height:28px;place-items:center;border-radius:9px;background:#eef5fc;color:var(--sec)}
+.student-tools[open] > summary::after{content:'−'}
+.student-tool-grid{display:grid;gap:.7rem;margin-top:.8rem}
+.student-tool-card{min-width:0;padding:.85rem;border:1px solid var(--line);border-radius:12px;background:#fff}
+.student-list-heading{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.student-list-heading h2{margin-bottom:0}
+@media(min-width:900px){.student-tool-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .wrap{width:100%;max-width:1400px;margin:0 auto;padding:.9rem .8rem calc(1.5rem + env(safe-area-inset-bottom));flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .card{background:var(--card);border-radius:14px;padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:0 3px 14px rgba(13,59,102,.07);border:1px solid rgba(0,0,0,.03)}
@@ -451,10 +479,13 @@ function txAll(stores, mode, fn) {
 
 // ============ الحالة ============
 const S = { settings: null, classes: [], subjects: [], students: [], grades: new Map(), exams: [], timetable: null, seating: null, absence: null, att: new Map() };
-const UI = { tab: 'home', stuClass: '', stuSearch: '', mSubj: '', mClass: '', mMonth: '', dir: 'h', ySubj: '', yClass: '',
+const UI = { tab: 'home', stuClass: '', stuSearch: '', studentToolsOpen: false, mSubj: '', mClass: '', mMonth: '', dir: 'h', ySubj: '', yClass: '',
   planClass: '', ttView: 'class', ttSel: '', ttPick: null, exam: null, schemeDraft: null, schemeSubj: null,
   aView: 'day', aClass: '', aDate: '', aMonth: '', aStu: '', aFrom: '', aTo: '', aRepDate: '', aRepCls: '', aPCls: '', aPFrom: '', aPTo: '', aPMin: 0,
   eView: 'month', eClass: '', eMonth: '', eSubj: '', eSort: 'rank', eStu: '' };
+document.addEventListener('toggle', event => {
+  if(event.target.id==='studentTools')UI.studentToolsOpen=event.target.open;
+}, true);
 
 function defSettings() {
   return { school: 'مدرسة تجريبية', year: '2026-2027', teacher: 'المعلم', principal: 'الإدارة',
@@ -562,8 +593,8 @@ const PRIMARY_TAB_IDS = new Set(['home', 'students', 'monthly']);
 function renderNav() {
   const primary = TABS.filter(([id]) => PRIMARY_TAB_IDS.has(id));
   const moreIsActive = !PRIMARY_TAB_IDS.has(UI.tab);
-  $('nav').innerHTML = `${primary.map(([id, label, icon]) => `<button class="${UI.tab === id ? 'on' : ''}" onclick="go('${id}')">${ic(icon)} ${label}</button>`).join('')}
-    <button class="${moreIsActive ? 'on' : ''}" onclick="openMoreTabs()" aria-haspopup="dialog">⋯ المزيد</button>`;
+  $('nav').innerHTML = `${primary.map(([id, label, icon]) => `<button class="${UI.tab === id ? 'on' : ''}" onclick="go('${id}')">${ic(icon)} ${id === 'monthly' ? 'الدرجات' : label}</button>`).join('')}
+    <button class="${moreIsActive ? 'on' : ''}" onclick="openMoreTabs()" aria-haspopup="dialog">المزيد</button>`;
 }
 function openMoreTabs() {
   const items = TABS.filter(([id]) => !PRIMARY_TAB_IDS.has(id));
@@ -608,10 +639,9 @@ function backupNoticeHTML() {
   if (!S.students.length && ![...S.grades.keys()].length) return '';
   const lb = S.settings.lastBackup, n = daysSince(lb);
   if (n !== null && n < 7) return '';
-  const msg = lb ? `آخر نسخة احتياطية كانت قبل ${n} ${n === 1 ? 'يوم' : 'أيام'}` : 'لم تأخذ نسخة احتياطية بعد';
-  return `<div class="card" style="border-right:5px solid #c98a00"><h2>النسخة الاحتياطية</h2>
-    <div class="warn">${msg} — البيانات محفوظة على هذا الجهاز فقط وتزول إذا حُذف التطبيق أو مُسحت بيانات المتصفح. احفظ نسخة الآن في «الملفات» أو أرسلها لنفسك.</div>
-    <div class="btns"><button class="btn g" onclick="exportBackup()">${ic('down')} حفظ نسخة احتياطية الآن</button></div></div>`;
+  const msg = lb ? `آخر نسخة احتياطية قبل ${n} ${n === 1 ? 'يوم' : 'أيام'}` : 'لم تحفظ نسخة احتياطية بعد';
+  return `<div class="backup-notice"><div><p><b>${msg}</b></p><small>بيانات المدرسة محفوظة على هذا الجهاز.</small></div>
+    <button class="btn g" onclick="exportBackup()">${ic('down')} حفظ نسخة</button></div>`;
 }
 function rHome() {
   const st = S.settings, h = new Date().getHours();
@@ -625,6 +655,7 @@ function rHome() {
     [false, 'راجع التقييم والأوائل وتقاريره', 'eval'],
     [S.seating.result !== null, 'وزّع الطلاب على قاعات الامتحان', 'seating']
   ];
+  const completedSteps = steps.filter(step => step[0]).length;
   return `
   <div class="hero"><div class="g1">${h < 12 ? 'صباح الخير' : 'مساء الخير'}، أستاذ ${esc(st.teacher)}</div>
     <div>${esc(st.school)}</div>
@@ -633,13 +664,20 @@ function rHome() {
     <div class="stat"><b>${S.classes.length}</b><span>الصفوف</span></div>
     <div class="stat"><b>${S.students.length}</b><span>الطلاب</span></div>
     <div class="stat"><b>${S.subjects.length}</b><span>المواد</span></div>
-    <div class="stat" style="background:linear-gradient(145deg,#7c5800,#b8860b)"><b>${S.exams.length}</b><span>دفاتر الأسئلة</span></div>
   </div>
   ${backupNoticeHTML()}
   ${homeAttHTML()}
-  <div class="card"><h2>خطوات العمل</h2><ul class="steps">
-    ${steps.map((s, i) => `<li class="${s[0] ? 'done' : ''}" onclick="go('${s[2]}')"><span class="n">${s[0] ? ic('check') : i + 1}</span><span>${s[1]}</span></li>`).join('')}
-  </ul></div>
+  <div class="card home-start-card">
+    <div class="home-start-head"><div><h2>ابدأ هنا</h2><p class="muted">الخطوات الأساسية لإدارة درجاتك</p></div><span>${completedSteps}/${steps.length}</span></div>
+    <div class="home-actions">
+      <button class="home-action" onclick="go('settings')"><strong>إعداد المدرسة</strong><small>الصفوف والمواد</small></button>
+      <button class="home-action" onclick="UI.studentToolsOpen=true;go('students')"><strong>إضافة الطلاب</strong><small>إدخال أو استيراد</small></button>
+      <button class="home-action" onclick="go('monthly')"><strong>تسجيل الدرجات</strong><small>شهرية وتُحفظ تلقائياً</small></button>
+    </div>
+    <details class="workflow-details"><summary>خطة العمل الكاملة · ${completedSteps} من ${steps.length}</summary><ul class="steps">
+      ${steps.map((s, i) => `<li class="${s[0] ? 'done' : ''}" onclick="go('${s[2]}')"><span class="n">${s[0] ? ic('check') : i + 1}</span><span>${s[1]}</span></li>`).join('')}
+    </ul></details>
+  </div>
   <div class="card"><h2>الصفوف</h2>
     ${S.classes.length ? `<div class="cls-cards">${S.classes.map((c, i) => `<div class="cls-card" onclick="UI.stuClass=S.classes[${i}];go('students')"><b>${esc(c)}</b><span class="muted">${classStudents(c).length} طالب</span></div>`).join('')}</div>`
       : '<p class="muted">لا توجد صفوف بعد — أضفها من الإعدادات.</p>'}
@@ -657,33 +695,38 @@ function rStudents() {
   let list = S.students.filter(s => (!UI.stuClass || s.cls === UI.stuClass) && (!q || arNorm(s.name).includes(qn) || String(s.num || '').includes(qn)));
   list.sort((a, b) => arCmp(a.cls, b.cls) || arCmp(a.name, b.name));
   return `
-  <div class="card"><h2>إضافة طالب</h2>
-    <div class="row">
-      <div class="f" style="flex:2 1 220px"><label>الاسم الكامل</label><input class="in" id="stName" placeholder="اسم الطالب/ة" onkeydown="if(event.key==='Enter')addStudent()"></div>
-      <div class="f"><label>الصف</label><select class="in" id="stCls">${opts(S.classes, addCls)}</select></div>
-      <div class="f"><label>رقم القيد (اختياري)</label><input class="in" id="stNum" inputmode="numeric"></div>
-      <div class="f"><label>هاتف ولي الأمر (اختياري)</label><input class="in" id="stPhone" inputmode="tel" dir="ltr"></div>
-      <div><button class="btn g" onclick="addStudent()">${ic('plus')} إضافة</button></div>
+  <details class="card student-tools" id="studentTools"${UI.studentToolsOpen ? ' open' : ''}>
+    <summary>إضافة أو استيراد الطلاب <small>${list.length} طالب</small></summary>
+    <div class="student-tool-grid">
+      <section class="student-tool-card"><h2>إضافة طالب</h2>
+        <div class="row">
+          <div class="f" style="flex:2 1 220px"><label>الاسم الكامل</label><input class="in" id="stName" placeholder="اسم الطالب/ة" onkeydown="if(event.key==='Enter')addStudent()"></div>
+          <div class="f"><label>الصف</label><select class="in" id="stCls">${opts(S.classes, addCls)}</select></div>
+          <div class="f"><label>رقم القيد (اختياري)</label><input class="in" id="stNum" inputmode="numeric"></div>
+          <div class="f"><label>هاتف ولي الأمر (اختياري)</label><input class="in" id="stPhone" inputmode="tel" dir="ltr"></div>
+          <div><button class="btn g" onclick="addStudent()">${ic('plus')} إضافة</button></div>
+        </div>
+        <details style="margin-top:.8rem"><summary style="cursor:pointer;font-weight:700;color:var(--pri)">إضافة قائمة أسماء دفعة واحدة (اسم في كل سطر)</summary>
+          <div class="row" style="margin-top:.5rem">
+            <div class="f" style="flex:3 1 260px"><textarea class="in" id="bulkNames" placeholder="فاطمة علي حسين&#10;زينب محمد جاسم&#10;..."></textarea></div>
+            <div class="f"><label>إلى الصف</label><select class="in" id="bulkCls">${opts(S.classes, addCls)}</select>
+              <button class="btn g" style="margin-top:.5rem;width:100%" onclick="addBulk()">${ic('plus')} إضافة القائمة</button></div>
+          </div>
+        </details>
+      </section>
+      <section class="student-tool-card"><h2>استيراد من Excel</h2>
+        <p class="muted">ملف Excel أو CSV؛ الأعمدة المطلوبة: الاسم والصف. رقم القيد والهاتف اختياريان.</p>
+        <div class="row">
+          <div class="f"><label>الصف الافتراضي</label><select class="in" id="impCls">${opts(S.classes, addCls)}</select></div>
+          <div class="btns">
+            <label class="btn b">${ic('up')} اختيار ملف<input type="file" accept=".xlsx,.csv,.txt" class="hidden" onchange="importStudents(this)"></label>
+            <button class="btn" onclick="downloadStudentTemplate()">${ic('down')} نموذج Excel فارغ</button>
+          </div>
+        </div>
+      </section>
     </div>
-    <details style="margin-top:.8rem"><summary style="cursor:pointer;font-weight:700;color:var(--pri)">إضافة قائمة أسماء دفعة واحدة (اسم في كل سطر)</summary>
-      <div class="row" style="margin-top:.5rem">
-        <div class="f" style="flex:3 1 260px"><textarea class="in" id="bulkNames" placeholder="فاطمة علي حسين&#10;زينب محمد جاسم&#10;..."></textarea></div>
-        <div class="f"><label>إلى الصف</label><select class="in" id="bulkCls">${opts(S.classes, addCls)}</select>
-          <button class="btn g" style="margin-top:.5rem;width:100%" onclick="addBulk()">${ic('plus')} إضافة القائمة</button></div>
-      </div>
-    </details>
-  </div>
-  <div class="card"><h2>الاستيراد من Excel</h2>
-    <p class="muted">ملف Excel (xlsx) أو CSV، والأعمدة: <b>الاسم</b> ، <b>الصف</b> ، <b>رقم القيد</b> ، <b>هاتف ولي الأمر</b> (الأخيران اختياريان). الصفوف الجديدة تُضاف تلقائياً. إذا كان عمود الصف فارغاً يوضع الطالب في الصف المختار هنا.</p>
-    <div class="row">
-      <div class="f"><label>الصف الافتراضي</label><select class="in" id="impCls">${opts(S.classes, addCls)}</select></div>
-      <div class="btns">
-        <label class="btn b">${ic('up')} اختيار ملف<input type="file" accept=".xlsx,.csv,.txt" class="hidden" onchange="importStudents(this)"></label>
-        <button class="btn" onclick="downloadStudentTemplate()">${ic('down')} تنزيل نموذج Excel فارغ</button>
-      </div>
-    </div>
-  </div>
-  <div class="card"><h2>قائمة الطلاب (${list.length})</h2>
+  </details>
+  <div class="card"><div class="student-list-heading"><h2>الطلاب (${list.length})</h2><button class="btn p sm" onclick="document.getElementById('studentTools').open=true;document.getElementById('studentTools').scrollIntoView({behavior:'smooth',block:'start'})">${ic('plus')} إضافة</button></div>
     <div class="row">
       <div class="f"><select class="in" onchange="UI.stuClass=this.value;render()">${opts([['', 'كل الصفوف'], ...S.classes], UI.stuClass)}</select></div>
       <div class="f"><input class="in" placeholder="بحث بالاسم أو القيد" value="${esc(UI.stuSearch)}" oninput="UI.stuSearch=this.value;clearTimeout(window._sT);window._sT=setTimeout(()=>{render();const e=document.getElementById('stSearch');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},350)" id="stSearch"></div>
