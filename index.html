@@ -35,6 +35,8 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 @media(min-width:900px){.nav{flex-wrap:wrap;justify-content:center}}
 .nav button{flex:0 0 auto;display:flex;align-items:center;gap:.35rem;border:1px solid transparent;background:#eef2f7;color:#40506a;border-radius:22px;padding:.5rem .95rem;font-weight:700;font-size:.88rem;cursor:pointer;min-height:40px}
 .nav button.on{background:var(--pri);color:#fff;border-color:var(--acc)}
+.more-tabs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.6rem}
+.more-tabs-grid .btn{display:flex;align-items:center;justify-content:flex-start;gap:.45rem}
 
 .wrap{width:100%;max-width:1400px;margin:0 auto;padding:.9rem .8rem calc(1.5rem + env(safe-area-inset-bottom));flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .card{background:var(--card);border-radius:14px;padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:0 3px 14px rgba(13,59,102,.07);border:1px solid rgba(0,0,0,.03)}
@@ -455,7 +457,7 @@ const UI = { tab: 'home', stuClass: '', stuSearch: '', mSubj: '', mClass: '', mM
   eView: 'month', eClass: '', eMonth: '', eSubj: '', eSort: 'rank', eStu: '' };
 
 function defSettings() {
-  return { school: 'مدرسة غرناطة الابتدائية للبنات', year: '2026-2027', teacher: 'نصيف جاسم محمد', principal: 'أحمد محسن عسل',
+  return { school: 'مدرسة تجريبية', year: '2026-2027', teacher: 'المعلم', principal: 'الإدارة',
     girls: true, term1: ['تشرين الأول', 'تشرين الثاني', 'كانون الأول'], term2: ['آذار', 'نيسان'], round: true,
     aiKey: '', aiModel: 'gemini-2.5-flash', font: 100, perPage: 20, evalWG: 80, evalTop: 3 };
 }
@@ -556,8 +558,17 @@ window.addEventListener('beforeunload', e => { if (UI.exam) { e.preventDefault()
 // ============ التنقل ============
 const TABS = [['home', 'الرئيسية', 'home'], ['students', 'الطلاب', 'users'], ['monthly', 'الدرجات الشهرية', 'edit'], ['yearly', 'السجل السنوي', 'book'], ['absence', 'الغيابات', 'cal'], ['eval', 'التقييم والأوائل', 'star'],
   ['exams', 'دفاتر الأسئلة', 'help'], ['timetable', 'الجدول الأسبوعي', 'grid'], ['seating', 'توزيع القاعات', 'seat'], ['settings', 'الإعدادات', 'gear']];
+const PRIMARY_TAB_IDS = new Set(['home', 'students', 'monthly']);
 function renderNav() {
-  $('nav').innerHTML = TABS.map(([id, label, icon]) => `<button class="${UI.tab === id ? 'on' : ''}" onclick="go('${id}')">${ic(icon)} ${label}</button>`).join('');
+  const primary = TABS.filter(([id]) => PRIMARY_TAB_IDS.has(id));
+  const moreIsActive = !PRIMARY_TAB_IDS.has(UI.tab);
+  $('nav').innerHTML = `${primary.map(([id, label, icon]) => `<button class="${UI.tab === id ? 'on' : ''}" onclick="go('${id}')">${ic(icon)} ${label}</button>`).join('')}
+    <button class="${moreIsActive ? 'on' : ''}" onclick="openMoreTabs()" aria-haspopup="dialog">⋯ المزيد</button>`;
+}
+function openMoreTabs() {
+  const items = TABS.filter(([id]) => !PRIMARY_TAB_IDS.has(id));
+  openModal('أقسام النظام', `<div class="more-tabs-grid">${items.map(([id, label, icon]) =>
+    `<button class="btn ${UI.tab === id ? 'g' : ''}" onclick="closeModal();go('${id}')">${ic(icon)} ${label}</button>`).join('')}</div>`);
 }
 function go(tab) {
   // دفتر الأسئلة المفتوح = تعديلات غير محفوظة؛ نمنع مغادرته بالخطأ
