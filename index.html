@@ -71,6 +71,7 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 .student-tool-card{min-width:0;padding:.85rem;border:1px solid var(--line);border-radius:12px;background:#fff}
 .student-list-heading{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 .student-list-heading h2{margin-bottom:0}
+.student-mobile-list{display:none}
 @media(min-width:900px){.student-tool-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .wrap{width:100%;max-width:1400px;margin:0 auto;padding:1rem 1.1rem calc(1.5rem + env(safe-area-inset-bottom));flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
@@ -370,6 +371,18 @@ h3.sec{font-size:12pt;color:#0d3b66;margin:10px 0 4px;border-bottom:1.5px solid 
   .backup-notice small{font-size:.7rem}
   .backup-notice .btn{grid-row:span 2;min-height:40px;padding:.4rem .7rem;font-size:.76rem}
   .tw{border-color:#e1e8f0;border-radius:13px}
+  .student-desktop-table{display:none}
+  .student-mobile-list{display:grid;gap:.55rem;margin-top:.7rem}
+  .student-mobile-card{display:grid;gap:.55rem;min-width:0;padding:.8rem;border:1px solid #e2eaf3;border-radius:15px;background:#fff;box-shadow:0 3px 12px rgba(23,59,94,.035)}
+  .student-mobile-main{display:flex;align-items:center;gap:.65rem;min-width:0}
+  .student-avatar{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:14px;background:#eaf1f9;color:#35628f;font-size:1.05rem;font-weight:800}
+  .student-mobile-name{display:grid;gap:.12rem;min-width:0}
+  .student-mobile-name strong{overflow-wrap:anywhere;color:#1b3653;font-size:.92rem}
+  .student-mobile-name small{color:#708096;font-size:.75rem}
+  .student-mobile-meta{display:flex;align-items:center;justify-content:space-between;gap:.4rem;flex-wrap:wrap;color:#708096;font-size:.74rem}
+  .student-mobile-meta b{color:#405772}
+  .student-mobile-actions{display:flex;gap:.45rem;border-top:1px solid #edf1f6;padding-top:.5rem}
+  .student-mobile-actions .btn{flex:1}
   .modal-bg{align-items:flex-end;padding:0}
   .modal{max-height:88dvh;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom)}
   .modal-h,.modal-b{padding-inline:1rem}
@@ -847,7 +860,11 @@ function rStudents() {
       <div class="f"><input class="in" placeholder="بحث بالاسم أو القيد" value="${esc(UI.stuSearch)}" oninput="UI.stuSearch=this.value;clearTimeout(window._sT);window._sT=setTimeout(()=>{render();const e=document.getElementById('stSearch');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},350)" id="stSearch"></div>
       <div class="btns" style="margin:0"><button class="btn g" onclick="exportStudents()">${ic('xls')} Excel</button><button class="btn" onclick="printStudents()">${ic('print')} طباعة</button></div>
     </div>
-    ${list.length ? `<div class="tw" style="margin-top:.6rem"><table class="t"><thead><tr><th>ت</th><th class="nm">الاسم</th><th>الصف</th><th>رقم القيد</th><th>هاتف ولي الأمر</th><th>إجراءات</th></tr></thead><tbody>
+    ${list.length ? `<div class="student-mobile-list">${list.map(s => `<article class="student-mobile-card">
+      <div class="student-mobile-main"><span class="student-avatar" aria-hidden="true">${esc([...s.name][0] || 'ط')}</span><div class="student-mobile-name"><strong>${esc(s.name)}</strong><small>${esc(s.cls)}</small></div></div>
+      <div class="student-mobile-meta"><span>رقم القيد <b>${esc(s.num || '-')}</b></span>${s.phone ? `<a href="tel:${esc(s.phone)}" dir="ltr">${esc(s.phone)}</a>` : '<span>لا يوجد هاتف مسجل</span>'}</div>
+      <div class="student-mobile-actions"><button class="btn" aria-label="تعديل ${esc(s.name)}" onclick="editStudent('${s.id}')">${ic('edit')} تعديل</button><button class="btn r" aria-label="حذف ${esc(s.name)}" onclick="deleteStudent('${s.id}')">${ic('trash')} حذف</button></div>
+    </article>`).join('')}</div><div class="tw student-desktop-table" style="margin-top:.6rem"><table class="t"><thead><tr><th>ت</th><th class="nm">الاسم</th><th>الصف</th><th>رقم القيد</th><th>هاتف ولي الأمر</th><th>إجراءات</th></tr></thead><tbody>
       ${list.map((s, i) => `<tr><td class="no">${i + 1}</td><td class="nm">${esc(s.name)}</td><td>${esc(s.cls)}</td><td>${esc(s.num || '-')}</td><td dir="ltr">${s.phone ? `<a href="tel:${esc(s.phone)}">${esc(s.phone)}</a>` : '-'}</td>
       <td><button class="btn sm" onclick="editStudent('${s.id}')">${ic('edit')}</button> <button class="btn sm r" onclick="deleteStudent('${s.id}')">${ic('trash')}</button></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="muted" style="margin-top:.6rem">لا يوجد طلاب مطابقون.</p>'}
