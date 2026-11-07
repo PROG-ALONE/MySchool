@@ -1,5 +1,5 @@
 // Service Worker — يعمل التطبيق بدون إنترنت، ويجلب أحدث نسخة عند توفر الاتصال
-const CACHE = 'school-app-v2.8.4';
+const CACHE = 'school-app-v2.8.5';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

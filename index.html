@@ -14,9 +14,9 @@
 <title>نظام إدارة المدرسة - الدرجات والجداول</title>
 <style>
 :root{
-  --pri:#0d3b66;--pri2:#1a5276;--sec:#1565c0;--acc:#b8860b;--acc2:#daa520;
-  --ok:#2e7d32;--bad:#c62828;--bg:#f3f6fa;--card:#fff;--text:#1a1a2e;--muted:#64748b;--line:#d8e0ea;
-  --oral:#fdecef;--written:#e9f1fb;--sub:#fff5d6;--tot:#e5f4e7;
+  --pri:#173b5e;--pri2:#24567d;--sec:#4778b8;--acc:#547eaf;--acc2:#789bc5;
+  --ok:#287553;--bad:#bd4d55;--bg:#f5f7fb;--card:#fff;--text:#1c2b3a;--muted:#65758a;--line:#e1e8f0;
+  --oral:#fbecef;--written:#eaf1fa;--sub:#f7f2e7;--tot:#e8f3ec;
 }
 *{box-sizing:border-box;margin:0;padding:0;touch-action:pan-x pan-y}
 html{-webkit-text-size-adjust:100%;height:100%;overscroll-behavior:none}
@@ -181,8 +181,8 @@ table.seat.mini td{width:24px;height:20px;border-radius:4px;padding:0;font-size:
 .item-row .in{min-height:36px;padding:.35rem .5rem}
 
 /* toast */
-#toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translate(-50%,120px);background:var(--pri);color:#fff;padding:.75rem 1.4rem;border-radius:12px;z-index:400;opacity:0;transition:.3s;font-weight:700;max-width:92vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25)}
-#toast.show{transform:translate(-50%,0);opacity:1}
+#toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translate(-50%,120px);background:var(--pri);color:#fff;padding:.75rem 1.4rem;border-radius:12px;z-index:400;opacity:0;pointer-events:none;transition:.3s;font-weight:700;max-width:92vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+#toast.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}
 #toast.bad{background:var(--bad)}#toast.ok{background:var(--ok)}
 
 /* print view (full page preview) */
@@ -347,6 +347,133 @@ h3.sec{font-size:12pt;color:#0d3b66;margin:10px 0 4px;border-bottom:1.5px solid 
   .btn{font-size:.85rem;padding:.5rem .7rem}
   .rc-main button{font-size:1.35rem;min-height:84px}
 }
+@media(max-width:640px){
+  body{background:#f5f7fb}
+  .top{
+    padding:calc(.55rem + env(safe-area-inset-top)) 1rem .6rem;
+    background:linear-gradient(135deg,#173b5e,#24567d);
+    box-shadow:0 3px 14px rgba(23,59,94,.12)
+  }
+  .top h1{font-size:1rem;line-height:1.45}
+  .top .sub{font-size:.76rem}
+  .nav{
+    position:fixed;
+    z-index:100;
+    inset:auto 0 0;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:.3rem;
+    padding:.45rem .55rem calc(.45rem + env(safe-area-inset-bottom));
+    border:0;
+    border-top:1px solid #e4eaf2;
+    background:rgba(255,255,255,.97);
+    box-shadow:0 -6px 24px rgba(27,48,74,.1);
+    backdrop-filter:blur(16px);
+  }
+  .nav button{
+    display:flex;
+    flex-direction:column;
+    gap:.12rem;
+    min-width:0;
+    min-height:52px;
+    padding:.4rem .15rem;
+    border:1px solid transparent;
+    border-radius:14px;
+    background:transparent;
+    color:#65758a;
+    font-size:.7rem;
+    font-weight:700;
+    line-height:1.25;
+    white-space:nowrap;
+  }
+  .nav button .ic{width:1.2rem;height:1.2rem}
+  .nav button.on{
+    border-color:#e0e9f5;
+    background:#edf3fa;
+    color:#173b5e;
+  }
+  .wrap{
+    width:100%;
+    padding:.7rem .65rem calc(5.5rem + env(safe-area-inset-bottom));
+  }
+  .hero{
+    padding:1rem;
+    border:1px solid #dfe9f5;
+    border-radius:18px;
+    background:linear-gradient(145deg,#eaf2fb,#f5f8fc);
+    color:#173b5e;
+    box-shadow:0 5px 16px rgba(23,59,94,.06);
+  }
+  .hero .g1{font-size:1.08rem;line-height:1.6}
+  .hero .muted{color:#60748a!important}
+  .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}
+  .stat{
+    padding:.7rem .35rem;
+    border:1px solid #e2eaf3;
+    border-radius:15px;
+    background:#fff;
+    color:#173b5e;
+    box-shadow:0 3px 12px rgba(23,59,94,.045);
+  }
+  .stat b{font-size:1.4rem}
+  .stat span{color:#65758a;font-size:.74rem;opacity:1}
+  .card{
+    margin-bottom:.75rem;
+    padding:.9rem;
+    border:1px solid #e6ebf2;
+    border-radius:17px;
+    background:#fff;
+    box-shadow:0 4px 16px rgba(28,43,58,.045);
+  }
+  .card h2{
+    margin-bottom:.7rem;
+    padding-bottom:.6rem;
+    border-bottom:1px solid #e8edf3;
+    font-size:1.03rem;
+  }
+  .card h2::before{width:4px;height:18px;background:#5b84b3}
+  .home-start-head h2{border:0;padding:0}
+  .home-actions{grid-template-columns:1fr;gap:.45rem}
+  .home-action{
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:.5rem;
+    padding:.75rem .8rem;
+    border-color:#e3eaf2;
+    border-radius:13px;
+    background:#f8fafd;
+  }
+  .home-action strong{font-size:.86rem}
+  .home-action small{font-size:.74rem;text-align:left}
+  .cls-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+  .cls-card{
+    padding:.75rem;
+    border:1px solid #e0e8f1;
+    border-radius:14px;
+    background:#f9fbfd;
+  }
+  .btn{min-height:44px;border-radius:12px}
+  .btn.sm{min-height:40px}
+  input.in,select.in,textarea.in{min-height:46px;border-radius:12px;background:#fff}
+  input.g{min-height:42px;border-radius:9px}
+  .tw{border-color:#e1e8f0;border-radius:13px}
+  .modal-bg{align-items:flex-end;padding:0}
+  .modal{
+    max-height:88dvh;
+    border-radius:20px 20px 0 0;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .modal-h,.modal-b{padding-inline:1rem}
+  .modal-f{padding-bottom:.8rem}
+  #toast{bottom:calc(76px + env(safe-area-inset-bottom))}
+}
+@media(min-width:641px){
+  .wrap{max-width:1120px}
+  .card{border-color:#e6ebf2;box-shadow:0 4px 18px rgba(28,43,58,.045)}
+}
+.backup-notice{border-color:#dbe7f3;border-inline-start-color:#5b84b3;background:#f2f7fc;color:#173b5e}
+.backup-notice small{color:#60748a}
+.backup-notice .btn{background:#24567d}
 </style>
 <style id="pageSize"></style>
 </head>
