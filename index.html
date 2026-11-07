@@ -339,6 +339,8 @@ h3.sec{font-size:12pt;color:#0d3b66;margin:10px 0 4px;border-bottom:1.5px solid 
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 }
 @media(max-width:640px){
+  .more-tabs-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+  .more-tabs-grid .btn{min-height:64px;padding:.55rem .5rem;white-space:normal;line-height:1.35;font-size:.78rem}
   .top{padding:calc(.6rem + env(safe-area-inset-top)) 1rem .65rem}
   .top-mark{flex-basis:40px;width:40px;height:40px;border-radius:13px}
   .top h1{max-width:74vw;font-size:1rem}
